@@ -13,9 +13,16 @@ import sbt.FileFunction.cached
 object WebappPlugin extends AutoPlugin {
 
   object autoImport {
+
+    sealed trait WebappMount
+    case class Servlet(path: String, className: String, async: Boolean) extends WebappMount
+    case class Filter(path: String, className: String, async: Boolean) extends WebappMount
+
     lazy val webappPrepare       = taskKey[Seq[(File, String)]]("prepare webapp contents for packaging")
     lazy val webappPostProcess   = taskKey[File => Unit]("additional task after preparing the webapp")
     lazy val webappWebInfClasses = settingKey[Boolean]("use WEB-INF/classes instead of WEB-INF/lib")
+    lazy val webappMounts        = settingKey[Seq[WebappMount]]("servlets/filters for generated WEB-INF/web.xml")
+
   }
 
   import autoImport._
@@ -29,10 +36,49 @@ object WebappPlugin extends AutoPlugin {
       , webappPrepare                    := webappPrepareTask.value
       , webappPostProcess                := { _ => () }
       , webappWebInfClasses              := false
+      , webappMounts                     := Nil
+      , resourceGenerators in Compile    += getWebappMounts
       , Compat.watchSourceSetting
     )
 
-  private def webappPrepareTask = Def.task {
+  private def getWebappMounts: Def.Initialize[Task[Seq[java.io.File]]] =
+    Def.task {
+      if (!webappMounts.value.isEmpty) {
+        val file = (target in webappPrepare).value / "WEB-INF" / "web.xml"
+        IO.write( file
+                , List( "<web-app>"
+                      , webappMounts.value.map({
+                          case Filter(path, className, async) =>
+                            s"""|  <filter>
+                                |    <filter-name>${className}</filter-name>
+                                |    <filter-class>${className}</filter-class>
+                                |    <async-supported>${async}</async-supported>
+                                |  </filter>
+                                |  <filter-mapping>
+                                |    <filter-name>${className}</filter-name>
+                                |    <url-pattern>${path}</url-pattern>
+                                |  </filter-mapping>""".stripMargin
+                          case Servlet(path, className, async) =>
+                            s"""|  <servlet>
+                                |    <servlet-name>${className}</servlet-name>
+                                |    <servlet-class>${className}</servlet-class>
+                                |    <async-supported>${async}</async-supported>
+                                |  </servlet>
+                                |  <servlet-mapping>
+                                |    <servlet-name>${className}</servlet-name>
+                                |    <url-pattern>${path}</url-pattern>
+                                |  </servlet-mapping>""".stripMargin
+                        }).mkString("\n")
+                      , "</web-app>"
+                      ).mkString("\n")
+                )
+        Seq(file)
+      } else {
+        Seq.empty
+      }
+    }
+
+  private def webappPrepareTask: Def.Initialize[Task[Seq[(java.io.File, String)]]] = Def.task {
 
     def cacheify(name: String, dest: File => Option[File], in: Set[File]): Set[File] =
       Compat.cached(streams.value.cacheDirectory / "xsbt-web-plugin" / name, lastModified, exists)({

@@ -1,0 +1,25 @@
+> webappPrepare
+$ absent target/webapp/WEB-INF/web.xml
+
+> 'set webappMounts := Seq(Servlet("/", "FooServlet", true))'
+> clean
+> webappPrepare
+$ exists target/webapp/WEB-INF/web.xml
+> diff web.xml.1 target/webapp/WEB-INF/web.xml
+
+> 'set webappMounts := Nil'
+> clean
+> webappPrepare
+$ absent target/webapp/WEB-INF/web.xml
+
+> 'set webappMounts := Seq(Filter("/", "FooFilter", true))'
+> clean
+> webappPrepare
+$ exists target/webapp/WEB-INF/web.xml
+> diff web.xml.2 target/webapp/WEB-INF/web.xml
+
+> 'set webappMounts := Seq(Filter("/", "FooFilter", true),Servlet("/", "FooServlet", true))'
+> clean
+> webappPrepare
+$ exists target/webapp/WEB-INF/web.xml
+> diff web.xml.3 target/webapp/WEB-INF/web.xml
