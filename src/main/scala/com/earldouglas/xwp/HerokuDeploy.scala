@@ -45,6 +45,7 @@ object HerokuDeploy extends AutoPlugin {
 
   override def projectSettings = Seq(
     herokuOptions       := Seq("-Xmx1g"),
+    herokuAppName       := name.value,
     herokuWarFile       := (packagedArtifact in (Compile, pkg), pkg)._2.value,
     herokuDeployLib     := "com.heroku.sdk" % "heroku-deploy" % "1.1.3",
     herokuDeployMain    := "com.heroku.sdk.deploy.DeployWar",
